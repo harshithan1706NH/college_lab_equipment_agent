@@ -4,6 +4,8 @@ import requests
 
 from dotenv import load_dotenv
 
+from app.tools.web_info import get_equipment_info
+
 from app.tools.equipment import (
     search_equipment,
     check_availability
@@ -22,11 +24,13 @@ from app.tools.notification import (
 
 load_dotenv()
 
+
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 MODEL = "openrouter/free"
+
 
 
 CONVERSATION_MEMORY = {}
@@ -35,6 +39,8 @@ CONVERSATION_MEMORY = {}
 
 
 TOOLS = [
+
+ 
 
     {
         "type": "function",
@@ -57,11 +63,14 @@ TOOLS = [
         }
     },
 
+
+   
+
     {
         "type": "function",
         "function": {
             "name": "check_availability",
-            "description": "Check the availability of laboratory equipment.",
+            "description": "Check the availability of laboratory equipment from the college database.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -78,6 +87,29 @@ TOOLS = [
             }
         }
     },
+
+
+  
+    {
+        "type": "function",
+        "function": {
+            "name": "get_equipment_info",
+            "description": "Get general information, meaning, purpose, and usage of laboratory equipment from the web.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "equipment_name": {
+                        "type": "string",
+                        "description": "Name of the laboratory equipment"
+                    }
+                },
+                "required": ["equipment_name"]
+            }
+        }
+    },
+
+
+
 
     {
         "type": "function",
@@ -114,6 +146,9 @@ TOOLS = [
         }
     },
 
+
+    
+
     {
         "type": "function",
         "function": {
@@ -131,6 +166,8 @@ TOOLS = [
             }
         }
     },
+
+
 
     {
         "type": "function",
@@ -153,6 +190,9 @@ TOOLS = [
         }
     },
 
+
+ 
+
     {
         "type": "function",
         "function": {
@@ -169,18 +209,19 @@ TOOLS = [
             }
         }
     }
+
 ]
 
 
-# =========================================================
-# MAP AI TOOL NAMES TO PYTHON FUNCTIONS
-# =========================================================
+
 
 TOOL_FUNCTIONS = {
 
     "search_equipment": search_equipment,
 
     "check_availability": check_availability,
+
+    "get_equipment_info": get_equipment_info,
 
     "borrow_equipment": borrow_equipment,
 
@@ -189,8 +230,8 @@ TOOL_FUNCTIONS = {
     "get_borrowing_status": get_borrowing_status,
 
     "get_notifications": get_notifications
-}
 
+}
 
 
 
@@ -204,10 +245,12 @@ You can:
 
 1. Search equipment
 2. Check equipment availability
-3. Borrow equipment
-4. Return equipment
-5. Check borrowing status
-6. Check notifications
+3. Get general equipment information from the web
+4. Borrow equipment
+5. Return equipment
+6. Check borrowing status
+7. Check notifications
+
 
 IMPORTANT RULES:
 
@@ -215,23 +258,49 @@ IMPORTANT RULES:
 - Never invent availability.
 - Never invent borrowing records.
 - Never invent due dates.
-- Use the appropriate tool whenever actual database information
-  is required.
-- Use previous conversation context to understand references such
-  as "it", "one", "that equipment", "the same item", etc.
+
+- Use the appropriate database tool whenever actual
+  college-specific information is required.
+
+- Use get_equipment_info when the user asks:
+  - what an equipment item is
+  - what it does
+  - what it is used for
+  - how it is generally used
+  - for general information about the equipment
+
+- Use database tools for college-specific information such as:
+  - quantity
+  - available quantity
+  - laboratory location
+  - equipment status
+  - borrowing records
+  - due dates
+
+- Do not use web information to determine college inventory
+  or availability.
+
+- Use previous conversation context to understand references
+  such as "it", "one", "that equipment", "the same item", etc.
+
 - If the user has already identified an equipment item in the
-  conversation, remember it and use that equipment when the user
-  refers to it later.
-- Correct obvious small typing mistakes when the intended meaning
-  is clear from the conversation.
-- If the user wants to borrow equipment, determine the equipment
-  from the current conversation before asking them to repeat it.
+  conversation, remember it and use that equipment when the
+  user refers to it later.
+
+- Correct obvious small typing mistakes when the intended
+  meaning is clear from the conversation.
+
+- If the user wants to borrow equipment, determine the
+  equipment from the current conversation before asking them
+  to repeat it.
+
 - If a required value such as quantity or duration is genuinely
   missing, ask the user for that value.
+
 - Use the result returned by the tool when giving your answer.
+
 - Keep responses clear and concise.
 """
-
 
 
 
@@ -260,7 +329,6 @@ def execute_tool(tool_name, arguments):
         }
 
 
-
 def run_agent(user_message, user_id=1):
 
     if not OPENROUTER_API_KEY:
@@ -269,20 +337,22 @@ def run_agent(user_message, user_id=1):
 
 
 
-
     if user_id not in CONVERSATION_MEMORY:
 
         CONVERSATION_MEMORY[user_id] = [
+
             {
                 "role": "system",
                 "content": SYSTEM_PROMPT
             }
+
         ]
 
 
-  
     messages = CONVERSATION_MEMORY[user_id]
 
+
+  
 
     messages.append(
         {
@@ -290,6 +360,7 @@ def run_agent(user_message, user_id=1):
             "content": user_message
         }
     )
+
 
 
 
@@ -305,10 +376,15 @@ def run_agent(user_message, user_id=1):
             },
 
             json={
+
                 "model": MODEL,
+
                 "messages": messages,
+
                 "tools": TOOLS,
+
                 "tool_choice": "auto"
+
             },
 
             timeout=60
@@ -330,10 +406,12 @@ def run_agent(user_message, user_id=1):
         assistant_message = data["choices"][0]["message"]
 
 
-       
+        
+
         messages.append(assistant_message)
 
 
+     
 
         if "tool_calls" not in assistant_message:
 
@@ -343,7 +421,7 @@ def run_agent(user_message, user_id=1):
             )
 
 
-       
+      
 
         for tool_call in assistant_message["tool_calls"]:
 
@@ -355,10 +433,15 @@ def run_agent(user_message, user_id=1):
 
 
             print("\n[Agent Tool Call]")
-            print(f"{tool_name}({arguments})")
+
+            print(
+                f"{tool_name}({arguments})"
+            )
 
 
             
+           
+
             result = execute_tool(
                 tool_name,
                 arguments
@@ -366,10 +449,12 @@ def run_agent(user_message, user_id=1):
 
 
             print("[Tool Result]")
+
             print(result)
 
 
            
+
             messages.append({
 
                 "role": "tool",
