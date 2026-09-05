@@ -26,13 +26,13 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Free model with tool-calling support
 MODEL = "openrouter/free"
 
 
-# =========================================================
-# TOOLS GIVEN TO THE AI
-# =========================================================
+CONVERSATION_MEMORY = {}
+
+
+
 
 TOOLS = [
 
@@ -192,9 +192,48 @@ TOOL_FUNCTIONS = {
 }
 
 
-# =========================================================
-# EXECUTE A TOOL
-# =========================================================
+
+
+SYSTEM_PROMPT = """
+You are the College Lab Equipment Management AI Agent.
+
+You help students and laboratory staff manage college
+laboratory equipment.
+
+You can:
+
+1. Search equipment
+2. Check equipment availability
+3. Borrow equipment
+4. Return equipment
+5. Check borrowing status
+6. Check notifications
+
+IMPORTANT RULES:
+
+- Never invent equipment information.
+- Never invent availability.
+- Never invent borrowing records.
+- Never invent due dates.
+- Use the appropriate tool whenever actual database information
+  is required.
+- Use previous conversation context to understand references such
+  as "it", "one", "that equipment", "the same item", etc.
+- If the user has already identified an equipment item in the
+  conversation, remember it and use that equipment when the user
+  refers to it later.
+- Correct obvious small typing mistakes when the intended meaning
+  is clear from the conversation.
+- If the user wants to borrow equipment, determine the equipment
+  from the current conversation before asking them to repeat it.
+- If a required value such as quantity or duration is genuinely
+  missing, ask the user for that value.
+- Use the result returned by the tool when giving your answer.
+- Keep responses clear and concise.
+"""
+
+
+
 
 def execute_tool(tool_name, arguments):
 
@@ -221,9 +260,6 @@ def execute_tool(tool_name, arguments):
         }
 
 
-# =========================================================
-# RUN AI AGENT
-# =========================================================
 
 def run_agent(user_message, user_id=1):
 
@@ -231,53 +267,31 @@ def run_agent(user_message, user_id=1):
 
         return "OpenRouter API key is not configured."
 
-    messages = [
 
-        {
-            "role": "system",
-            "content": f"""
-You are the College Lab Equipment Management AI Agent.
 
-You help students and laboratory staff manage college
-laboratory equipment.
 
-You can:
+    if user_id not in CONVERSATION_MEMORY:
 
-1. Search equipment
-2. Check equipment availability
-3. Borrow equipment
-4. Return equipment
-5. Check borrowing status
-6. Check notifications
+        CONVERSATION_MEMORY[user_id] = [
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT
+            }
+        ]
 
-The current user's ID is {user_id}.
 
-IMPORTANT RULES:
+  
+    messages = CONVERSATION_MEMORY[user_id]
 
-- Never invent equipment information.
-- Never invent availability.
-- Never invent borrowing records.
-- Never invent due dates.
-- Use the appropriate tool whenever actual database information
-  is required.
-- If the user wants to borrow equipment, first determine which
-  equipment they mean and check availability.
-- If the user has not specified a required value, ask them for it.
-- Use the result returned by the tool when giving your answer.
-- Keep responses clear and concise.
-"""
-        },
 
+    messages.append(
         {
             "role": "user",
             "content": user_message
         }
-    ]
+    )
 
 
-    # =====================================================
-    # AGENT LOOP
-    # =====================================================
 
     while True:
 
@@ -301,9 +315,6 @@ IMPORTANT RULES:
         )
 
 
-        # =================================================
-        # CHECK OPENROUTER RESPONSE
-        # =================================================
 
         if response.status_code != 200:
 
@@ -319,14 +330,10 @@ IMPORTANT RULES:
         assistant_message = data["choices"][0]["message"]
 
 
-        # Add AI message to conversation
-
+       
         messages.append(assistant_message)
 
 
-        # =================================================
-        # AI DID NOT REQUEST A TOOL
-        # =================================================
 
         if "tool_calls" not in assistant_message:
 
@@ -336,9 +343,7 @@ IMPORTANT RULES:
             )
 
 
-        # =================================================
-        # AI REQUESTED ONE OR MORE TOOLS
-        # =================================================
+       
 
         for tool_call in assistant_message["tool_calls"]:
 
@@ -349,32 +354,22 @@ IMPORTANT RULES:
             )
 
 
-            print(
-                f"\n[Agent Tool Call]"
-            )
-
-            print(
-                f"{tool_name}({arguments})"
-            )
+            print("\n[Agent Tool Call]")
+            print(f"{tool_name}({arguments})")
 
 
-            # Execute Python function
-
+            
             result = execute_tool(
                 tool_name,
                 arguments
             )
 
 
-            print(
-                f"[Tool Result]"
-            )
-
+            print("[Tool Result]")
             print(result)
 
 
-            # Send result back to AI
-
+           
             messages.append({
 
                 "role": "tool",
