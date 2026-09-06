@@ -1,7 +1,11 @@
 import sqlite3
 from pathlib import Path
 
-DATABASE_PATH = Path(__file__).resolve().parent.parent.parent / "lab_equipment.db"
+
+DATABASE_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "lab_equipment.db"
+)
 
 
 def get_db_connection():
@@ -11,11 +15,14 @@ def get_db_connection():
     return connection
 
 
+
+
 def initialize_database():
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    # Users
+   
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +32,7 @@ def initialize_database():
         )
     """)
 
-    # Equipment
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS equipment (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +45,8 @@ def initialize_database():
         )
     """)
 
-    # Borrowing records
+ 
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS borrowings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,12 +58,16 @@ def initialize_database():
             return_date TEXT,
             status TEXT NOT NULL DEFAULT 'Borrowed',
 
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (equipment_id) REFERENCES equipment(id)
+            FOREIGN KEY (user_id)
+                REFERENCES users(id),
+
+            FOREIGN KEY (equipment_id)
+                REFERENCES equipment(id)
         )
     """)
 
-    # Notifications
+    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +77,8 @@ def initialize_database():
             created_at TEXT NOT NULL,
             is_read INTEGER NOT NULL DEFAULT 0,
 
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
         )
     """)
 
@@ -73,40 +86,205 @@ def initialize_database():
     connection.close()
 
 
+
 def seed_database():
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    # Add a test user if none exists
-    cursor.execute("SELECT COUNT(*) FROM users")
 
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("""
-            INSERT INTO users (name, email, role)
-            VALUES (?, ?, ?)
-        """, (
+
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
+
+    if user_count > 0:
+        connection.close()
+        return
+
+ 
+
+    users = [
+        (
             "Harshitha",
             "harshitha@example.com",
             "student"
-        ))
+        ),
+        (
+            "Vicky",
+            "vicky@example.com",
+            "student"
+        ),
+        (
+            "Hoshi",
+            "hoshi@example.com",
+            "student"
+        )
+    ]
 
-    # Add sample equipment if none exists
-    cursor.execute("SELECT COUNT(*) FROM equipment")
+    cursor.executemany("""
+        INSERT INTO users (
+            name,
+            email,
+            role
+        )
+        VALUES (?, ?, ?)
+    """, users)
 
-    if cursor.fetchone()[0] == 0:
-        equipment = [
-            ("Oscilloscope", "Measurement", "Electronics Lab", 10, 10, "Working"),
-            ("Multimeter", "Measurement", "Electronics Lab", 8, 8, "Working"),
-            ("Function Generator", "Signal", "Electronics Lab", 5, 5, "Working"),
-            ("Soldering Iron", "Tools", "Electronics Lab", 12, 12, "Working"),
-            ("Digital Logic Trainer", "Training Kit", "Digital Lab", 6, 6, "Working")
-        ]
+  
 
-        cursor.executemany("""
-            INSERT INTO equipment
-            (name, category, lab, quantity, available_quantity, status)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, equipment)
+    equipment = [
+
+       
+        (
+            "Oscilloscope",
+            "Measurement",
+            "Electronics Lab",
+            10,
+            8,
+            "Working"
+        ),
+
+        (
+            "Digital Multimeter",
+            "Measurement",
+            "Electronics Lab",
+            12,
+            10,
+            "Working"
+        ),
+
+        (
+            "Function Generator",
+            "Signal",
+            "Electronics Lab",
+            6,
+            4,
+            "Working"
+        ),
+
+        (
+            "DC Power Supply",
+            "Power",
+            "Electronics Lab",
+            8,
+            8,
+            "Working"
+        ),
+
+        (
+            "Soldering Iron",
+            "Tools",
+            "Electronics Lab",
+            15,
+            13,
+            "Working"
+        ),
+
+       
+
+        (
+            "Digital Logic Trainer",
+            "Training Kit",
+            "Digital Electronics Lab",
+            8,
+            6,
+            "Working"
+        ),
+
+        (
+            "Logic Analyzer",
+            "Measurement",
+            "Digital Electronics Lab",
+            5,
+            4,
+            "Working"
+        ),
+
+        (
+            "FPGA Development Board",
+            "Development Board",
+            "Digital Electronics Lab",
+            10,
+            9,
+            "Working"
+        ),
+
+        (
+            "IC Tester",
+            "Testing",
+            "Digital Electronics Lab",
+            4,
+            4,
+            "Working"
+        ),
+
+        (
+            "Breadboard",
+            "Prototype Board",
+            "Digital Electronics Lab",
+            20,
+            18,
+            "Working"
+        ),
+
+        
+
+        (
+            "Spectrum Analyzer",
+            "Measurement",
+            "Communication Lab",
+            3,
+            2,
+            "Working"
+        ),
+
+        (
+            "RF Signal Generator",
+            "Signal",
+            "Communication Lab",
+            4,
+            3,
+            "Working"
+        ),
+
+        (
+            "Antenna Trainer",
+            "Training Kit",
+            "Communication Lab",
+            6,
+            5,
+            "Working"
+        ),
+
+        (
+            "CRO",
+            "Measurement",
+            "Communication Lab",
+            5,
+            5,
+            "Working"
+        ),
+
+        (
+            "Communication Trainer Kit",
+            "Training Kit",
+            "Communication Lab",
+            7,
+            5,
+            "Working"
+        )
+    ]
+
+    cursor.executemany("""
+        INSERT INTO equipment (
+            name,
+            category,
+            lab,
+            quantity,
+            available_quantity,
+            status
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, equipment)
 
     connection.commit()
     connection.close()

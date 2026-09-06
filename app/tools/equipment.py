@@ -1,18 +1,31 @@
 from app.database.db import get_db_connection
 
 
-def add_equipment(
-    name: str,
-    category: str,
-    lab: str,
-    quantity: int
-):
+def add_equipment(name, category, lab, quantity):
+    if not name or not lab:
+        return {
+            "success": False,
+            "message": "Equipment name and lab are required."
+        }
+
+    if quantity <= 0:
+        return {
+            "success": False,
+            "message": "Quantity must be greater than 0."
+        }
+
     connection = get_db_connection()
     cursor = connection.cursor()
 
     cursor.execute("""
-        INSERT INTO equipment
-        (name, category, lab, quantity, available_quantity, status)
+        INSERT INTO equipment (
+            name,
+            category,
+            lab,
+            quantity,
+            available_quantity,
+            status
+        )
         VALUES (?, ?, ?, ?, ?, ?)
     """, (
         name,
@@ -30,21 +43,81 @@ def add_equipment(
 
     return {
         "success": True,
-        "equipment_id": equipment_id,
-        "message": f"{quantity} {name}(s) added successfully."
+        "message": f"{name} added successfully.",
+        "equipment_id": equipment_id
     }
 
 
-def search_equipment(name: str = None, lab: str = None):
+def search_equipment(name=None, lab=None):
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    query = "SELECT * FROM equipment WHERE 1=1"
+    query = """
+        SELECT
+            id,
+            name,
+            category,
+            lab,
+            quantity,
+            available_quantity,
+            status
+        FROM equipment
+        WHERE 1=1
+    """
+
     parameters = []
 
     if name:
         query += " AND LOWER(name) LIKE LOWER(?)"
         parameters.append(f"%{name}%")
+
+    if lab:
+        query += " AND LOWER(lab) LIKE LOWER(?)"
+        parameters.append(f"%{lab}%")
+
+    query += " ORDER BY lab, name"
+
+    cursor.execute(query, parameters)
+
+    equipment = [dict(row) for row in cursor.fetchall()]
+
+    connection.close()
+
+    if not equipment:
+        return {
+            "success": False,
+            "message": "No equipment found."
+        }
+
+    return {
+        "success": True,
+        "equipment": equipment
+    }
+
+
+def check_availability(name, lab=None):
+    if not name:
+        return {
+            "success": False,
+            "message": "Equipment name is required."
+        }
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    query = """
+        SELECT
+            id,
+            name,
+            lab,
+            quantity,
+            available_quantity,
+            status
+        FROM equipment
+        WHERE LOWER(name) LIKE LOWER(?)
+    """
+
+    parameters = [f"%{name}%"]
 
     if lab:
         query += " AND LOWER(lab) LIKE LOWER(?)"
@@ -56,36 +129,63 @@ def search_equipment(name: str = None, lab: str = None):
 
     connection.close()
 
-    return equipment
-
-
-def check_availability(name: str, lab: str = None):
-    equipment = search_equipment(name, lab)
-
     if not equipment:
         return {
-            "found": False,
-            "message": f"No equipment named '{name}' was found."
+            "success": False,
+            "message": f"No equipment found for '{name}'."
         }
 
     return {
-        "found": True,
+        "success": True,
         "equipment": equipment
     }
 
 
-def update_equipment(
-    equipment_id: int,
-    quantity: int = None,
-    status: str = None
-):
+def get_labs():
+    """
+    Return all labs present in the equipment database.
+    """
+
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
-        "SELECT * FROM equipment WHERE id = ?",
-        (equipment_id,)
-    )
+    cursor.execute("""
+        SELECT
+            lab,
+            COUNT(*) AS equipment_types
+        FROM equipment
+        GROUP BY lab
+        ORDER BY lab
+    """)
+
+    labs = [dict(row) for row in cursor.fetchall()]
+
+    connection.close()
+
+    if not labs:
+        return {
+            "success": False,
+            "message": "No labs found in the database."
+        }
+
+    return {
+        "success": True,
+        "total_labs": len(labs),
+        "labs": labs
+    }
+
+
+def update_equipment(equipment_id, quantity=None, status=None):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            quantity,
+            available_quantity
+        FROM equipment
+        WHERE id = ?
+    """, (equipment_id,))
 
     equipment = cursor.fetchone()
 
@@ -97,14 +197,20 @@ def update_equipment(
             "message": "Equipment not found."
         }
 
-    updates = []
-    parameters = []
+    current_quantity = equipment["quantity"]
+    current_available = equipment["available_quantity"]
 
     if quantity is not None:
-        borrowed_quantity = (
-            equipment["quantity"] -
-            equipment["available_quantity"]
-        )
+
+        if quantity <= 0:
+            connection.close()
+
+            return {
+                "success": False,
+                "message": "Quantity must be greater than 0."
+            }
+
+        borrowed_quantity = current_quantity - current_available
 
         if quantity < borrowed_quantity:
             connection.close()
@@ -112,41 +218,34 @@ def update_equipment(
             return {
                 "success": False,
                 "message": (
-                    f"Cannot reduce quantity below "
-                    f"{borrowed_quantity}; equipment is currently borrowed."
+                    "Quantity cannot be reduced below the number "
+                    "of currently borrowed units."
                 )
             }
 
         new_available_quantity = quantity - borrowed_quantity
 
-        updates.append("quantity = ?")
-        parameters.append(quantity)
-
-        updates.append("available_quantity = ?")
-        parameters.append(new_available_quantity)
+        cursor.execute("""
+            UPDATE equipment
+            SET quantity = ?,
+                available_quantity = ?
+            WHERE id = ?
+        """, (
+            quantity,
+            new_available_quantity,
+            equipment_id
+        ))
 
     if status is not None:
-        updates.append("status = ?")
-        parameters.append(status)
 
-    if not updates:
-        connection.close()
-
-        return {
-            "success": False,
-            "message": "No changes were provided."
-        }
-
-    parameters.append(equipment_id)
-
-    cursor.execute(
-        f"""
-        UPDATE equipment
-        SET {", ".join(updates)}
-        WHERE id = ?
-        """,
-        parameters
-    )
+        cursor.execute("""
+            UPDATE equipment
+            SET status = ?
+            WHERE id = ?
+        """, (
+            status,
+            equipment_id
+        ))
 
     connection.commit()
     connection.close()
@@ -157,14 +256,17 @@ def update_equipment(
     }
 
 
-def remove_equipment(equipment_id: int):
+def remove_equipment(equipment_id):
     connection = get_db_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
-        "SELECT * FROM equipment WHERE id = ?",
-        (equipment_id,)
-    )
+    cursor.execute("""
+        SELECT
+            quantity,
+            available_quantity
+        FROM equipment
+        WHERE id = ?
+    """, (equipment_id,))
 
     equipment = cursor.fetchone()
 
@@ -176,18 +278,26 @@ def remove_equipment(equipment_id: int):
             "message": "Equipment not found."
         }
 
-    if equipment["available_quantity"] != equipment["quantity"]:
+    borrowed_quantity = (
+        equipment["quantity"]
+        - equipment["available_quantity"]
+    )
+
+    if borrowed_quantity > 0:
         connection.close()
 
         return {
             "success": False,
-            "message": "Cannot remove equipment while some units are borrowed."
+            "message": (
+                "Equipment cannot be removed because "
+                "some units are currently borrowed."
+            )
         }
 
-    cursor.execute(
-        "DELETE FROM equipment WHERE id = ?",
-        (equipment_id,)
-    )
+    cursor.execute("""
+        DELETE FROM equipment
+        WHERE id = ?
+    """, (equipment_id,))
 
     connection.commit()
     connection.close()

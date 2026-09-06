@@ -7,8 +7,12 @@ from dotenv import load_dotenv
 from app.tools.web_info import get_equipment_info
 
 from app.tools.equipment import (
+    add_equipment,
     search_equipment,
-    check_availability
+    check_availability,
+    update_equipment,
+    remove_equipment,
+    get_labs
 )
 
 from app.tools.borrowing import (
@@ -32,21 +36,22 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "openrouter/free"
 
 
-
 CONVERSATION_MEMORY = {}
-
-
 
 
 TOOLS = [
 
- 
+
 
     {
         "type": "function",
         "function": {
             "name": "search_equipment",
-            "description": "Search for laboratory equipment by name or laboratory.",
+            "description": (
+                "Search for laboratory equipment by name or "
+                "laboratory. Use this when the user wants to "
+                "find equipment or list equipment in a lab."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -70,7 +75,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "check_availability",
-            "description": "Check the availability of laboratory equipment from the college database.",
+            "description": (
+                "Check the availability of laboratory equipment "
+                "from the college database."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -89,18 +97,44 @@ TOOLS = [
     },
 
 
-  
+ 
+
+    {
+        "type": "function",
+        "function": {
+            "name": "get_labs",
+            "description": (
+                "Get all laboratories available in the college "
+                "equipment database. Use this when the user asks "
+                "how many labs exist, which labs exist, or wants "
+                "a list of laboratories."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+
+
+
     {
         "type": "function",
         "function": {
             "name": "get_equipment_info",
-            "description": "Get general information, meaning, purpose, and usage of laboratory equipment from the web.",
+            "description": (
+                "Get general information, meaning, purpose, "
+                "and usage of laboratory equipment from the web."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "equipment_name": {
                         "type": "string",
-                        "description": "Name of the laboratory equipment"
+                        "description": (
+                            "Name of the laboratory equipment"
+                        )
                     }
                 },
                 "required": ["equipment_name"]
@@ -115,13 +149,18 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "borrow_equipment",
-            "description": "Borrow laboratory equipment for a specified number of days.",
+            "description": (
+                "Borrow laboratory equipment for a specified "
+                "number of days."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "user_id": {
                         "type": "integer",
-                        "description": "ID of the user borrowing the equipment"
+                        "description": (
+                            "ID of the user borrowing the equipment"
+                        )
                     },
                     "equipment_id": {
                         "type": "integer",
@@ -129,11 +168,16 @@ TOOLS = [
                     },
                     "quantity": {
                         "type": "integer",
-                        "description": "Number of units to borrow"
+                        "description": (
+                            "Number of units to borrow"
+                        )
                     },
                     "duration_days": {
                         "type": "integer",
-                        "description": "Number of days the equipment is required"
+                        "description": (
+                            "Number of days the equipment "
+                            "is required"
+                        )
                     }
                 },
                 "required": [
@@ -147,45 +191,25 @@ TOOLS = [
     },
 
 
-    
 
     {
         "type": "function",
         "function": {
             "name": "return_equipment",
-            "description": "Return equipment that was previously borrowed.",
+            "description": (
+                "Return equipment that was previously borrowed."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "borrowing_id": {
                         "type": "integer",
-                        "description": "ID of the borrowing record"
+                        "description": (
+                            "ID of the borrowing record"
+                        )
                     }
                 },
                 "required": ["borrowing_id"]
-            }
-        }
-    },
-
-
-
-    {
-        "type": "function",
-        "function": {
-            "name": "get_borrowing_status",
-            "description": "Get the borrowing records of a user.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_id": {
-                        "type": "integer"
-                    },
-                    "status": {
-                        "type": "string",
-                        "description": "Optional status such as Borrowed or Returned"
-                    }
-                },
-                "required": ["user_id"]
             }
         }
     },
@@ -196,8 +220,39 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_borrowing_status",
+            "description": (
+                "Get the borrowing records of a user."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": (
+                            "Optional status such as "
+                            "Borrowed or Returned"
+                        )
+                    }
+                },
+                "required": ["user_id"]
+            }
+        }
+    },
+
+
+   
+
+    {
+        "type": "function",
+        "function": {
             "name": "get_notifications",
-            "description": "Get notifications belonging to a user.",
+            "description": (
+                "Get notifications belonging to a user."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -220,6 +275,8 @@ TOOL_FUNCTIONS = {
     "search_equipment": search_equipment,
 
     "check_availability": check_availability,
+
+    "get_labs": get_labs,
 
     "get_equipment_info": get_equipment_info,
 
@@ -245,11 +302,12 @@ You can:
 
 1. Search equipment
 2. Check equipment availability
-3. Get general equipment information from the web
-4. Borrow equipment
-5. Return equipment
-6. Check borrowing status
-7. Check notifications
+3. List and count laboratories
+4. Get general equipment information from the web
+5. Borrow equipment
+6. Return equipment
+7. Check borrowing status
+8. Check notifications
 
 
 IMPORTANT RULES:
@@ -258,9 +316,29 @@ IMPORTANT RULES:
 - Never invent availability.
 - Never invent borrowing records.
 - Never invent due dates.
+- Never invent laboratory names.
 
 - Use the appropriate database tool whenever actual
   college-specific information is required.
+
+- Use get_labs when the user asks:
+  - how many labs are available
+  - how many labs exist
+  - what labs are available
+  - which labs exist
+  - list the laboratories
+  - show all labs
+
+- Use search_equipment when the user asks:
+  - what equipment exists
+  - list equipment
+  - find equipment
+  - what equipment is in a particular lab
+  - which equipment matches a name
+
+- Use check_availability when the user asks whether
+  specific equipment is available or how many units
+  of specific equipment are available.
 
 - Use get_equipment_info when the user asks:
   - what an equipment item is
@@ -276,6 +354,7 @@ IMPORTANT RULES:
   - equipment status
   - borrowing records
   - due dates
+  - laboratory names
 
 - Do not use web information to determine college inventory
   or availability.
@@ -304,6 +383,7 @@ IMPORTANT RULES:
 
 
 
+
 def execute_tool(tool_name, arguments):
 
     if tool_name not in TOOL_FUNCTIONS:
@@ -329,6 +409,7 @@ def execute_tool(tool_name, arguments):
         }
 
 
+
 def run_agent(user_message, user_id=1):
 
     if not OPENROUTER_API_KEY:
@@ -336,6 +417,7 @@ def run_agent(user_message, user_id=1):
         return "OpenRouter API key is not configured."
 
 
+   
 
     if user_id not in CONVERSATION_MEMORY:
 
@@ -352,7 +434,7 @@ def run_agent(user_message, user_id=1):
     messages = CONVERSATION_MEMORY[user_id]
 
 
-  
+   
 
     messages.append(
         {
@@ -362,7 +444,7 @@ def run_agent(user_message, user_id=1):
     )
 
 
-
+    
 
     while True:
 
@@ -391,6 +473,7 @@ def run_agent(user_message, user_id=1):
         )
 
 
+      
 
         if response.status_code != 200:
 
@@ -406,12 +489,12 @@ def run_agent(user_message, user_id=1):
         assistant_message = data["choices"][0]["message"]
 
 
-        
+  
 
         messages.append(assistant_message)
 
 
-     
+    
 
         if "tool_calls" not in assistant_message:
 
@@ -421,7 +504,6 @@ def run_agent(user_message, user_id=1):
             )
 
 
-      
 
         for tool_call in assistant_message["tool_calls"]:
 
@@ -439,7 +521,6 @@ def run_agent(user_message, user_id=1):
             )
 
 
-            
            
 
             result = execute_tool(
@@ -453,7 +534,7 @@ def run_agent(user_message, user_id=1):
             print(result)
 
 
-           
+         
 
             messages.append({
 
